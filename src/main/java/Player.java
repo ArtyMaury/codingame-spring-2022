@@ -165,15 +165,21 @@ class Space {
     if (hero.pos.equals(pos)) {
       nbHerosDifferents--;
     }
+    // TODO influencer les cases adjacentes
     score.addAndGet(-nbHerosDifferents * 100);
     monsters.forEach(monster -> {
-      score.addAndGet(50 + (int) (1000 / Player.myBase.pos.getDistanceTo(monster.pos)));
+      if (monster.isThreatForMe()) {
+        score.addAndGet(100 + monster.health);
+        score.addAndGet((int) (6000 / Player.myBase.pos.getDistanceTo(monster.pos)));
+      }
+      // score.addAndGet((int) hero.pos.getDistanceTo(monster.pos));
+      Player.debug(score.get() + pos.toString());
     });
-    // TODO influencer les cases adjacentes
     if (isDefensivePosition[hero.id]) {
       score.addAndGet(50);
     }
-    return new Score(score.get(), new Move(pos, score));
+    Action action = new Move(pos, score);
+    return new Score(score.get(), action);
   }
 
 }
@@ -258,6 +264,10 @@ class Map {
     for (int i = 0; i < 3; i++) {
       bestActions[i] = bestScores[i].action;
     }
+
+    if (Player.myBase.mana >= 30) {
+      bestActions[0] = new Wind();
+    }
   }
 
   // Return true if there is no monster threatening me
@@ -281,8 +291,8 @@ class Position {
 
   Position(int x, int y, boolean absolute) {
     if (absolute) {
-      this.x = x;
-      this.y = y;
+      this.x = Math.max(0, Math.min(Map.SIZE_X * Map.RATIO, x));
+      this.y = Math.max(0, Math.min(Map.SIZE_Y * Map.RATIO, y));
     } else {
       to(x, y);
     }
@@ -298,7 +308,7 @@ class Position {
   }
 
   Position toReal() {
-    return new Position(x * Map.RATIO, y * Map.RATIO, true);
+    return new Position((x * Map.RATIO) + (Map.RATIO / 2), (y * Map.RATIO) + (Map.RATIO / 2), true);
   }
 
   void to(int x, int y) {
@@ -343,15 +353,17 @@ class Base {
   Position pos;
   int health;
   int mana;
+  Position enemyPosition;
   static final int[][][] DEFENSIVE_POSITIONS = new int[][][] {
       {},
-      { { 10, 10 } },
-      { { 30, 10 }, { 10, 30 } },
-      { { 40, 20 }, { 10, 10 }, { 20, 40 } }
+      { { 20, 20 } },
+      { { 30, 15 }, { 15, 30 } },
+      { { 45, 10 }, { 35, 35 }, { 15, 45 } }
   };
 
   Base(int x, int y) {
     pos = new Position(x, y);
+    enemyPosition = x == 0 ? new Position(Map.SIZE_X, Map.SIZE_Y, true) : new Position(0, 0, true);
     this.health = 0;
     this.mana = 0;
   }
@@ -399,7 +411,7 @@ class Monster extends Entity {
   }
 
   public boolean isThreatForMe() {
-    return threatFor == 1 && Player.myBase.isInDangerZone(pos);
+    return threatFor == 1;
   }
 
   // toString id and pos
@@ -495,11 +507,11 @@ class Wind extends Action {
   Wind(Position pos, Object message) {
     super(message);
     Position finalPos = pos.toReal();
-    this.action = "WIND " + finalPos.x + " " + finalPos.y;
+    this.action = "SPELL WIND " + finalPos.x + " " + finalPos.y;
   }
 
-  Wind(Position pos) {
-    this(pos, "");
+  Wind() {
+    this(Player.myBase.enemyPosition, "bye");
   }
 }
 
@@ -507,7 +519,7 @@ class Wind extends Action {
 class Shield extends Action {
   Shield(int id, Object message) {
     super(message);
-    this.action = "SHIELD " + id;
+    this.action = "SPELL SHIELD " + id;
   }
 
   Shield(int id) {
@@ -520,7 +532,7 @@ class Control extends Action {
   Control(int id, Position pos, Object message) {
     super(message);
     Position finalPos = pos.toReal();
-    this.action = "CONTROL " + id + " " + finalPos.x + " " + finalPos.y;
+    this.action = "SPELL CONTROL " + id + " " + finalPos.x + " " + finalPos.y;
   }
 
   Control(int id, Position pos) {
